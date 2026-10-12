@@ -83,6 +83,7 @@ local OriginalWalkSpeed = 16
 local OriginalJumpPower = 50
 local FullBrightApplied = false
 local ClarezaApplied = false
+local OriginalCameraType = Camera.CameraType
 
 local OriginalSettings = {
     Ambient = Lighting.Ambient,
@@ -239,9 +240,33 @@ local function UpdateBtnVisual(active)
     end
 end
 
+local function SetAimbotOn(on)
+    getgenv().SystemConfig.MiraAtiva = on
+    local cam = workspace.CurrentCamera
+    if cam then
+        if on then
+            if cam.CameraType ~= Enum.CameraType.Scriptable then
+                OriginalCameraType = cam.CameraType
+            end
+            cam.CameraType = Enum.CameraType.Scriptable
+        else
+            cam.CameraType = OriginalCameraType or Enum.CameraType.Custom
+        end
+    end
+    FloatingBtn.Visible = on
+    UpdateBtnVisual(on)
+end
+
+-- Se o jogo recriar a câmera, reaponta a referência e reaplica o Scriptable
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    Camera = workspace.CurrentCamera
+    if getgenv().SystemConfig.MiraAtiva and Camera then
+        Camera.CameraType = Enum.CameraType.Scriptable
+    end
+end)
+
 FloatingBtn.MouseButton1Click:Connect(function()
-    getgenv().SystemConfig.MiraAtiva = not getgenv().SystemConfig.MiraAtiva
-    UpdateBtnVisual(getgenv().SystemConfig.MiraAtiva)
+    SetAimbotOn(not getgenv().SystemConfig.MiraAtiva)
 end)
 
 --// =============================================
@@ -567,9 +592,7 @@ CombatTab:CreateToggle({
     Name = "Ativar Mira Assistida",
     CurrentValue = false,
     Callback = function(v)
-        getgenv().SystemConfig.MiraAtiva = v
-        FloatingBtn.Visible = v
-        UpdateBtnVisual(v)
+        SetAimbotOn(v)
     end
 })
 CombatTab:CreateSlider({
@@ -1419,12 +1442,22 @@ StatusTab:CreateToggle({
 RunService.RenderStepped:Connect(function(dt)
     local cfg = getgenv().SystemConfig
 
-    -- Mira Assistida
+    -- Mira Assistida (câmera Scriptable = mira 100% presa no alvo)
     if cfg.MiraAtiva then
-        local target = getTarget()
-        if target then
-            local goal = CFrame.new(Camera.CFrame.Position, target.Position)
-            Camera.CFrame = Camera.CFrame:Lerp(goal, cfg.Smoothness * math.clamp(60 * dt, 0, 1))
+        local cam = workspace.CurrentCamera
+        if cam then
+            Camera = cam
+            if cam.CameraType ~= Enum.CameraType.Scriptable then
+                cam.CameraType = Enum.CameraType.Scriptable
+            end
+            local target = getTarget()
+            if target then
+                local pos = cam.CFrame.Position
+                if (target.Position - pos).Magnitude > 0.05 then
+                    local goal = CFrame.lookAt(pos, target.Position)
+                    cam.CFrame = cam.CFrame:Lerp(goal, cfg.Smoothness * math.clamp(60 * dt, 0, 1))
+                end
+            end
         end
     end
 
